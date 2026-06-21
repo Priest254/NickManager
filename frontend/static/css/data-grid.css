@@ -1,0 +1,86 @@
+/* Data Grid */
+.data-grid-container {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: rgba(0, 0, 0, 0.2);
+  margin-top: 1rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.data-table th, .data-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--panel-border);
+  text-align: left;
+}
+
+.data-table th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+  color: var(--text-secondary);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.data-table tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.data-table td.editable {
+  cursor: pointer;
+}
+
+.data-table td.editable:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.data-table td input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.data-table td input:focus {
+  outline: 1px solid var(--accent-color);
+  background: var(--panel-bg);
+}
+
+/* Tree View */
+.tree-item {
+  padding: 0.5rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.tree-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.tree-item.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent-color);
+}
+
+.tree-children {
+  padding-left: 1.5rem;
+  display: none;
+}
+
+.tree-children.active {
+  display: block;
+}

@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg[binary]
+geoalchemy2
+geopandas
+fiona
+jinja2
+python-multipart
