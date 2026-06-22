@@ -35,6 +35,7 @@ def get_geojson(schema: str, table: str, limit: int = 1000, db: Session = Depend
                 
             # Build query to get GeoJSON
             # We transform to 4326 for Leaflet compatibility
+            # Exclude the geometry column from properties to avoid raw WKB in the response
             query = sql.SQL("""
                 SELECT row_to_json(fc) AS geojson
                 FROM (
@@ -42,13 +43,18 @@ def get_geojson(schema: str, table: str, limit: int = 1000, db: Session = Depend
                     FROM (
                         SELECT 'Feature' AS type,
                                ST_AsGeoJSON(ST_Transform({geom}, 4326))::json AS geometry,
-                               row_to_json((SELECT l FROM (SELECT t.*) AS l)) AS properties
+                               row_to_json((
+                                   SELECT l FROM (
+                                       SELECT t.* 
+                                   ) AS l
+                               ) - ARRAY[{geom_name}]) AS properties
                         FROM {schema}.{table} AS t
                         LIMIT %s
                     ) AS f
                 ) AS fc;
             """).format(
                 geom=sql.Identifier(geom_col),
+                geom_name=sql.Literal(geom_col),
                 schema=sql.Identifier(schema),
                 table=sql.Identifier(table)
             )

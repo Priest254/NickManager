@@ -20,6 +20,35 @@ class UpdateCellRequest(BaseModel):
 class RawQueryRequest(BaseModel):
     query: str
 
+def _serialize_row(row: dict) -> dict:
+    """Convert non-JSON-serializable values (bytes, memoryview) to hex strings."""
+    for k, v in row.items():
+        if isinstance(v, (memoryview, bytes)):
+            row[k] = v.hex()
+    return row
+
+@router.get("/schemas/{schema}/tables/{table}/primary-key")
+def get_primary_key(schema: str, table: str, db: Session = Depends(get_db)):
+    """Return the primary key column name(s) for a table."""
+    profile = get_active_connection(db)
+    with get_pg_connection(profile) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT kcu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                    AND tc.table_name = kcu.table_name
+                WHERE tc.constraint_type = 'PRIMARY KEY'
+                  AND tc.table_schema = %s
+                  AND tc.table_name = %s
+                ORDER BY kcu.ordinal_position;
+            """, (schema, table))
+            rows = cur.fetchall()
+            pk_columns = [r['column_name'] for r in rows]
+            return {"primary_key_columns": pk_columns}
+
 @router.get("/schemas/{schema}/tables/{table}/rows")
 def get_table_rows(
     schema: str, 
@@ -45,14 +74,16 @@ def get_table_rows(
             try:
                 cur.execute(query, (limit, offset))
                 rows = cur.fetchall()
+                rows = [_serialize_row(row) for row in rows]
                 
-                # Convert memoryviews/bytes (e.g. geometries) to hex or string for JSON serialization
-                for row in rows:
-                    for k, v in row.items():
-                        if isinstance(v, memoryview) or isinstance(v, bytes):
-                            row[k] = v.hex()
+                # Also return total count for proper pagination
+                count_query = sql.SQL("SELECT COUNT(*) AS total FROM {}.{}").format(
+                    sql.Identifier(schema), sql.Identifier(table)
+                )
+                cur.execute(count_query)
+                total = cur.fetchone()['total']
 
-                return {"rows": rows}
+                return {"rows": rows, "total": total}
             except Exception as e:
                 raise HTTPException(status_code=400, detail=str(e))
 
@@ -105,6 +136,27 @@ def rename_column(
                 conn.rollback()
                 raise HTTPException(status_code=400, detail=str(e))
 
+@router.delete("/schemas/{schema}/tables/{table}")
+def drop_table(
+    schema: str,
+    table: str,
+    db: Session = Depends(get_db)
+):
+    profile = get_active_connection(db)
+    with get_pg_connection(profile) as conn:
+        with conn.cursor() as cur:
+            query = sql.SQL("DROP TABLE {}.{}").format(
+                sql.Identifier(schema),
+                sql.Identifier(table)
+            )
+            try:
+                cur.execute(query)
+                conn.commit()
+                return {"success": True, "message": f"Table {schema}.{table} dropped"}
+            except Exception as e:
+                conn.rollback()
+                raise HTTPException(status_code=400, detail=str(e))
+
 @router.delete("/schemas/{schema}/tables/{table}/columns/{column}")
 def drop_column(
     schema: str,
@@ -139,10 +191,7 @@ def execute_raw_query(req: RawQueryRequest, db: Session = Depends(get_db)):
                 # If it's a SELECT or RETURNING query, fetch results
                 if cur.description:
                     rows = cur.fetchall()
-                    for row in rows:
-                        for k, v in row.items():
-                            if isinstance(v, memoryview) or isinstance(v, bytes):
-                                row[k] = v.hex()
+                    rows = [_serialize_row(row) for row in rows]
                     conn.commit()
                     return {"success": True, "rows": rows, "columns": [col.name for col in cur.description]}
                 else:

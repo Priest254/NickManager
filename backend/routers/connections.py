@@ -21,8 +21,7 @@ class ConnectionProfileResponse(ConnectionProfileCreate):
     id: int
     is_active: bool
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}
 
 @router.get("/", response_model=List[ConnectionProfileResponse])
 def get_connections(db: Session = Depends(get_db)):
@@ -30,7 +29,7 @@ def get_connections(db: Session = Depends(get_db)):
 
 @router.post("/", response_model=ConnectionProfileResponse)
 def create_connection(profile: ConnectionProfileCreate, db: Session = Depends(get_db)):
-    db_profile = ConnectionProfile(**profile.dict())
+    db_profile = ConnectionProfile(**profile.model_dump())
     db.add(db_profile)
     db.commit()
     db.refresh(db_profile)

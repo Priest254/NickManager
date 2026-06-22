@@ -40,9 +40,13 @@ def export_database(db: Session = Depends(get_db)):
             finally:
                 process.stdout.close()
                 process.wait()
-                if process.returncode != 0:
-                    err = process.stderr.read().decode()
-                    print(f"pg_dump error: {err}")
+                
+        # Check that the process actually started and hasn't immediately failed
+        import time
+        time.sleep(0.2)
+        if process.poll() is not None and process.returncode != 0:
+            err = process.stderr.read().decode()
+            raise HTTPException(status_code=500, detail=f"pg_dump failed: {err}")
                     
         response = StreamingResponse(iter_file(), media_type="application/octet-stream")
         response.headers["Content-Disposition"] = f"attachment; filename={profile.db_name}_backup.dump"
