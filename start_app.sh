@@ -1,15 +1,27 @@
 #!/bin/bash
+set -e
+
+cd "$(dirname "$0")"
+
 echo "Starting PostGIS Manager..."
 echo "Please wait while the server initializes..."
 
-# Start the FastAPI server using the python virtual environment
-nm/bin/uvicorn backend.main:app &
+if [ -x "nm/bin/python" ]; then
+  PYTHON_BIN="nm/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+else
+  echo "Python 3 was not found. Install Python 3.12 and try again."
+  exit 1
+fi
+
+"$PYTHON_BIN" -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
 SERVER_PID=$!
 
-# Wait a few seconds for the server to start up
 sleep 3
 
-# Attempt to open the default web browser (macOS / Linux / WSL)
 if command -v xdg-open > /dev/null; then
   xdg-open http://localhost:8000
 elif command -v open > /dev/null; then
@@ -18,5 +30,4 @@ else
   echo "Server is running at http://localhost:8000"
 fi
 
-# Wait for the server process to keep the script running
-wait $SERVER_PID
+wait "$SERVER_PID"
