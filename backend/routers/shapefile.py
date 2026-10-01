@@ -6,9 +6,11 @@ import tempfile
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import URL
 import geopandas as gpd
 
 from backend.database import get_db
+from backend.credentials import get_profile_password
 from backend.routers.browser import get_active_connection
 
 router = APIRouter(prefix="/api/shapefile", tags=["shapefile"])
@@ -29,9 +31,13 @@ async def upload_shapefile(
     # Build engine. We attach a connect event to set search_path on every new connection
     # so PostGIS types (which live in 'public' by default) are always resolvable even when
     # writing into a different target schema.
-    conn_string = (
-        f"postgresql+psycopg://{profile.user}:{profile.password}"
-        f"@{profile.host}:{profile.port}/{profile.db_name}"
+    conn_string = URL.create(
+        "postgresql+psycopg",
+        username=profile.user,
+        password=get_profile_password(profile),
+        host=profile.host,
+        port=profile.port,
+        database=profile.db_name,
     )
     pg_engine = create_engine(conn_string)
 

@@ -19,8 +19,5 @@ if not errorlevel 1 (
 echo Starting PostGIS Manager...
 echo Please wait while the server initializes...
 
-:: Open the browser after the server starts
-start "" http://localhost:8000
-
-:: Start the FastAPI server in the current environment
-%PYTHON_CMD% -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+:: Start the local app and open the browser when the server is ready.
+%PYTHON_CMD% run_app.py

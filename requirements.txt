@@ -7,3 +7,4 @@ geopandas
 fiona
 jinja2
 python-multipart
+keyring>=25,<27

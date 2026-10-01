@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -5,9 +7,11 @@ from typing import List
 import psycopg
 
 from backend.database import get_db
+from backend.credentials import delete_profile_password, store_profile_password
 from backend.models import ConnectionProfile
 
 router = APIRouter(prefix="/api/connections", tags=["connections"])
+logger = logging.getLogger(__name__)
 
 class ConnectionProfileResponse(BaseModel):
     id: int
@@ -34,9 +38,27 @@ def get_connections(db: Session = Depends(get_db)):
 
 @router.post("/", response_model=ConnectionProfileResponse)
 def create_connection(profile: ConnectionProfileCreate, db: Session = Depends(get_db)):
-    db_profile = ConnectionProfile(**profile.model_dump())
+    db_profile = ConnectionProfile(**profile.model_dump(exclude={"password"}), password="")
     db.add(db_profile)
-    db.commit()
+    db.flush()
+    try:
+        store_profile_password(db_profile.id, profile.password)
+    except Exception:
+        db.rollback()
+        logger.exception("Could not store a connection password")
+        raise HTTPException(
+            status_code=503,
+            detail="Could not save the connection password in the operating-system credential store.",
+        )
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        try:
+            delete_profile_password(db_profile.id)
+        except Exception:
+            logger.exception("Could not remove an orphaned connection password after the profile save failed")
+        raise
     db.refresh(db_profile)
     return db_profile
 
@@ -78,4 +100,5 @@ def delete_connection(profile_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Profile not found")
     db.delete(profile)
     db.commit()
+    delete_profile_password(profile_id)
     return {"message": "Deleted successfully"}

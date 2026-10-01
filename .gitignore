@@ -25,6 +25,7 @@ share/python-wheels/
 # Virtual Environment
 nm/
 venv/
+.venv/
 .env
 
 # SQLite Databases
@@ -38,3 +39,6 @@ Thumbs.db
 # Project specifics
 *.dump
 *.sql
+packaging/postgresql/bin/
+packaging/postgresql/licenses/
+packaging/postgresql/LICENSE

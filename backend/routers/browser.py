@@ -5,6 +5,7 @@ from psycopg.rows import dict_row
 from typing import List, Dict, Any
 
 from backend.database import get_db
+from backend.credentials import get_profile_password
 from backend.models import ConnectionProfile
 
 router = APIRouter(prefix="/api/browser", tags=["browser"])
@@ -16,9 +17,17 @@ def get_active_connection(db: Session) -> ConnectionProfile:
     return profile
 
 def get_pg_connection(profile: ConnectionProfile):
-    conn_string = f"postgresql://{profile.user}:{profile.password}@{profile.host}:{profile.port}/{profile.db_name}"
+    password = get_profile_password(profile)
     try:
-        return psycopg.connect(conn_string, row_factory=dict_row)
+        return psycopg.connect(
+            host=profile.host,
+            port=profile.port,
+            dbname=profile.db_name,
+            user=profile.user,
+            password=password,
+            row_factory=dict_row,
+            connect_timeout=10,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to connect to database: {str(e)}")
 

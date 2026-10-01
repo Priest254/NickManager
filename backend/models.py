@@ -10,5 +10,5 @@ class ConnectionProfile(Base):
     port = Column(Integer, default=5432, nullable=False)
     db_name = Column(String, nullable=False)
     user = Column(String, nullable=False)
-    password = Column(String, nullable=False)
+    password = Column(String, nullable=False, default="")
     is_active = Column(Boolean, default=False)

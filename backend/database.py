@@ -1,12 +1,11 @@
-import os
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# SQLite database for storing connection profiles
-DATABASE_URL = "sqlite:///./data/app.db"
+from backend.app_paths import data_dir
 
-os.makedirs("./data", exist_ok=True)
-
+DATABASE_PATH = data_dir() / "app.db"
+DATABASE_URL = URL.create("sqlite", database=str(DATABASE_PATH))
 engine = create_engine(
     DATABASE_URL, connect_args={"check_same_thread": False}
 )

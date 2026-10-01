@@ -17,17 +17,4 @@ else
   exit 1
 fi
 
-"$PYTHON_BIN" -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
-SERVER_PID=$!
-
-sleep 3
-
-if command -v xdg-open > /dev/null; then
-  xdg-open http://localhost:8000
-elif command -v open > /dev/null; then
-  open http://localhost:8000
-else
-  echo "Server is running at http://localhost:8000"
-fi
-
-wait "$SERVER_PID"
+"$PYTHON_BIN" run_app.py

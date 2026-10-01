@@ -1,0 +1,90 @@
+name: Build Windows installer
+
+env:
+  PG_CLIENT_VERSION: "18.4"
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            packaging/requirements-build.txt
+      - name: Install application and packaging dependencies
+        run: python -m pip install -r requirements.txt -r packaging/requirements-build.txt
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Bundle PostgreSQL client tools
+        shell: pwsh
+        run: |
+          $ProgressPreference = "SilentlyContinue"
+          $archive = Join-Path $env:RUNNER_TEMP "postgresql-binaries.zip"
+          $extract = Join-Path $env:RUNNER_TEMP "postgresql-binaries"
+          $tools = "packaging/postgresql/bin"
+          $licenses = "packaging/postgresql/licenses"
+          New-Item -ItemType Directory -Force -Path $tools | Out-Null
+          New-Item -ItemType Directory -Force -Path $licenses | Out-Null
+          $url = "https://get.enterprisedb.com/postgresql/postgresql-$env:PG_CLIENT_VERSION-1-windows-x64-binaries.zip"
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          Expand-Archive -Path $archive -DestinationPath $extract
+          $dump = Get-ChildItem -Path $extract -Filter pg_dump.exe -Recurse | Select-Object -First 1
+          if (-not $dump) { throw "pg_dump.exe was not found in the PostgreSQL binary archive." }
+          $restore = Join-Path $dump.DirectoryName "pg_restore.exe"
+          if (-not (Test-Path $restore)) { throw "pg_restore.exe was not found beside pg_dump.exe." }
+          Copy-Item $dump.FullName $tools
+          Copy-Item $restore $tools
+          Get-ChildItem -Path $dump.DirectoryName -Filter "*.dll" | Copy-Item -Destination $tools
+          Get-ChildItem -Path $extract -Recurse -File |
+            Where-Object { $_.Name -match '^(LICENSE|COPYING|COPYRIGHT|NOTICE)(\..*)?$' } |
+            ForEach-Object {
+              $relative = $_.FullName.Substring($extract.Length).TrimStart('\')
+              $destination = Join-Path $licenses $relative
+              New-Item -ItemType Directory -Force -Path (Split-Path $destination) | Out-Null
+              Copy-Item $_.FullName $destination
+            }
+          Invoke-WebRequest `
+            -Uri "https://raw.githubusercontent.com/postgres/postgres/REL_$($env:PG_CLIENT_VERSION.Replace('.', '_'))/COPYRIGHT" `
+            -OutFile "packaging/postgresql/LICENSE"
+          & (Join-Path $tools "pg_dump.exe") --version
+          if ($LASTEXITCODE -ne 0) { throw "Bundled pg_dump could not start." }
+          & (Join-Path $tools "pg_restore.exe") --version
+          if ($LASTEXITCODE -ne 0) { throw "Bundled pg_restore could not start." }
+      - name: Build standalone application
+        run: pyinstaller --noconfirm --clean packaging/PostGISManager.spec
+      - name: Run packaged application smoke check
+        run: dist/PostGISManager/PostGISManager.exe --check
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+      - name: Build installer
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '0.1.0' }}
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $compiler packaging/windows-installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PostGISManager-Windows-Installer
+          path: dist/installer/*.exe
+          if-no-files-found: error
+      - name: Publish Windows installer to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/installer/*.exe
+          generate_release_notes: true

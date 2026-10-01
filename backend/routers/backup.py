@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from ..database import get_db
+from ..credentials import get_profile_password
+from ..pg_tools import resolve_pg_tool
 from .browser import get_active_connection
 
 router = APIRouter(prefix="/api/backup", tags=["backup"])
@@ -16,7 +18,7 @@ def export_database(db: Session = Depends(get_db)):
     
     # We will run pg_dump with custom format
     cmd = [
-        "pg_dump",
+        resolve_pg_tool("pg_dump"),
         "-h", profile.host,
         "-p", str(profile.port),
         "-U", profile.user,
@@ -25,7 +27,7 @@ def export_database(db: Session = Depends(get_db)):
     ]
     
     env = os.environ.copy()
-    env["PGPASSWORD"] = profile.password
+    env["PGPASSWORD"] = get_profile_password(profile)
     
     try:
         process = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -70,7 +72,7 @@ async def restore_database(
         
     try:
         cmd = [
-            "pg_restore",
+            resolve_pg_tool("pg_restore"),
             "-h", profile.host,
             "-p", str(profile.port),
             "-U", profile.user,
@@ -85,7 +87,7 @@ async def restore_database(
         cmd.append(tmp_path)
         
         env = os.environ.copy()
-        env["PGPASSWORD"] = profile.password
+        env["PGPASSWORD"] = get_profile_password(profile)
         
         result = subprocess.run(cmd, env=env, capture_output=True, text=True)
         
