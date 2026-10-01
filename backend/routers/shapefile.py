@@ -7,13 +7,35 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
-import geopandas as gpd
 
 from backend.database import get_db
 from backend.credentials import get_profile_password
 from backend.routers.browser import get_active_connection
 
 router = APIRouter(prefix="/api/shapefile", tags=["shapefile"])
+
+
+def _import_geopandas():
+    """Import geopandas lazily.
+
+    geopandas pulls in fiona/pyogrio, which load native GDAL/PROJ libraries.
+    Importing it at module load time means a packaging issue with those
+    native dependencies would crash the *entire application* on startup,
+    before the server even binds a port. Deferring the import to request
+    time means a problem here only disables shapefile import, instead of
+    taking down the whole app.
+    """
+    try:
+        import geopandas as gpd
+        return gpd
+    except Exception as exc:  # pragma: no cover - exercised only when native deps are broken
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Shapefile import is unavailable because the geospatial libraries "
+                f"(geopandas/GDAL) failed to load: {exc}"
+            ),
+        ) from exc
 
 @router.post("/upload")
 async def upload_shapefile(
@@ -23,6 +45,8 @@ async def upload_shapefile(
     if_exists: str = Form("fail"),  # fail, replace, append
     db: Session = Depends(get_db)
 ):
+    gpd = _import_geopandas()
+
     profile = get_active_connection(db)
     
     if not file.filename.endswith('.zip'):

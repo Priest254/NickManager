@@ -8,9 +8,32 @@ APP_NAME = "PostGISManager"
 
 
 def resource_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
-    return Path(__file__).resolve().parents[1]
+    if not getattr(sys, "frozen", False):
+        return Path(__file__).resolve().parents[1]
+
+    exe_dir = Path(sys.executable).resolve().parent
+    meipass = getattr(sys, "_MEIPASS", None)
+
+    # PyInstaller's one-folder layout has varied across versions: the bundled
+    # "frontend" data directory may live directly in _MEIPASS, in a
+    # "_internal" subfolder next to the executable, or alongside the
+    # executable itself. Probe the known candidates and pick whichever one
+    # actually contains our bundled frontend, instead of trusting a single
+    # assumption that could silently point at a non-existent path and crash
+    # the app at startup (e.g. when mounting static files).
+    candidates = []
+    if meipass:
+        candidates.append(Path(meipass))
+    candidates.append(exe_dir / "_internal")
+    candidates.append(exe_dir)
+
+    for candidate in candidates:
+        if (candidate / "frontend").is_dir():
+            return candidate
+
+    # Nothing matched; fall back to the most likely candidate so callers get
+    # a clear "path does not exist" error instead of an obscure crash.
+    return candidates[0] if candidates else exe_dir
 
 
 def data_dir() -> Path:
