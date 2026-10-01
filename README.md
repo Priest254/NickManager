@@ -1,12 +1,12 @@
 # PostGIS Manager
 
-A local, single-user web application designed to manage PostgreSQL and PostGIS databases. Built with a premium, glassmorphism-inspired dark mode UI, and powered by FastAPI, Vanilla JS, and Leaflet.
+A local, single-user web application designed to manage PostgreSQL and PostGIS databases. Built with a responsive dark workspace, and powered by FastAPI, Vanilla JS, and Leaflet.
 
 ## Features
 
 - **Connection Management:** Create, test, and save multiple PostgreSQL database connection profiles. Stored locally via SQLite.
 - **Database Browser:** Seamlessly explore databases, schemas, and tables with an interactive tree menu.
-- **Data Grid & CRUD:** Browse rows with pagination, sort, and edit cells inline directly from your browser.
+- **Data Grid & CRUD:** Search across table rows, sort columns, choose page sizes, and safely edit cells inline when a table has a single-column primary key.
 - **Column Management:** Manage table schemas by easily renaming or safely deleting columns.
 - **Shapefile Import:** Upload zipped shapefiles (`.shp` inside `.zip`) and seamlessly import them into PostGIS leveraging `geopandas` and `fiona`.
 - **Spatial Dashboard:** Visually inspect PostGIS geometry columns mapped out onto an interactive Leaflet.js dashboard using GeoJSON representations.

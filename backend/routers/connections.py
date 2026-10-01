@@ -9,6 +9,17 @@ from backend.models import ConnectionProfile
 
 router = APIRouter(prefix="/api/connections", tags=["connections"])
 
+class ConnectionProfileResponse(BaseModel):
+    id: int
+    name: str
+    host: str
+    port: int
+    db_name: str
+    user: str
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
 class ConnectionProfileCreate(BaseModel):
     name: str
     host: str
@@ -16,12 +27,6 @@ class ConnectionProfileCreate(BaseModel):
     db_name: str
     user: str
     password: str
-
-class ConnectionProfileResponse(ConnectionProfileCreate):
-    id: int
-    is_active: bool
-
-    model_config = {"from_attributes": True}
 
 @router.get("/", response_model=List[ConnectionProfileResponse])
 def get_connections(db: Session = Depends(get_db)):
@@ -51,9 +56,15 @@ def activate_connection(profile_id: int, db: Session = Depends(get_db)):
 
 @router.post("/test")
 def test_connection(profile: ConnectionProfileCreate):
-    conn_string = f"postgresql://{profile.user}:{profile.password}@{profile.host}:{profile.port}/{profile.db_name}"
     try:
-        with psycopg.connect(conn_string) as conn:
+        with psycopg.connect(
+            host=profile.host,
+            port=profile.port,
+            dbname=profile.db_name,
+            user=profile.user,
+            password=profile.password,
+            connect_timeout=5,
+        ) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1")
         return {"success": True, "message": "Connection successful"}

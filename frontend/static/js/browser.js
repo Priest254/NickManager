@@ -4,11 +4,25 @@ let currentPage   = 1;
 let currentColumns   = [];
 let currentTotalRows = 0;
 let currentPrimaryKey = null;
-const PAGE_SIZE = 50;
+let pageSize = 50;
+let currentSearch = '';
+let currentSortColumn = '';
+let currentSortDescending = false;
+let browserSearchTimeout = null;
+let tableSearchTimeout = null;
+let tableRequestId = 0;
+let browserFilterRequestId = 0;
 
 let hasGeometry  = false;
 let leafletMap   = null;
 let geoJsonLayer = null;
+
+window.resetTableView = function() {
+    tableRequestId++;
+    currentSchema = '';
+    currentTable = '';
+    currentPage = 1;
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -137,26 +151,39 @@ document.addEventListener('DOMContentLoaded', () => {
 // ─── Browser Tree ─────────────────────────────────────────────────────────────
 window.loadBrowser = async function() {
     const container = document.getElementById('db-browser-container');
-    container.innerHTML = '<div style="color:var(--text-secondary);font-size:0.8rem;">Loading…</div>';
+    if (!container) return;
+    container.classList.remove('error-state');
+    container.innerHTML = '<div class="empty-tree">Loading schemas…</div>';
     try {
         const res = await fetch('/api/browser/schemas');
-        if (!res.ok) throw new Error('Failed to load schemas');
+        if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            if (res.status === 400) {
+                container.innerHTML = '<div class="empty-tree">Connect to a database to browse its schemas.</div>';
+                return;
+            }
+            throw new Error(error.detail || 'Failed to load schemas');
+        }
         const data = await res.json();
         container.innerHTML = '';
+        container.classList.remove('error-state');
         if (!data.schemas.length) {
-            container.innerHTML = '<div style="color:var(--text-secondary);font-size:0.8rem;">No schemas found.</div>';
+            container.innerHTML = '<div class="empty-tree">No schemas found in this database.</div>';
             return;
         }
         data.schemas.forEach(schema => {
             container.appendChild(_buildSchemaNode(schema));
         });
+        if (document.getElementById('browser-search').value.trim()) await applyBrowserFilter();
     } catch (err) {
-        container.innerHTML = `<div style="color:var(--danger-color);font-size:0.8rem;">${escapeHtml(err.message)}</div>`;
+        container.textContent = err.message;
+        container.classList.add('error-state');
     }
 }
 
 function _buildSchemaNode(schema) {
     const wrapper = document.createElement('div');
+    wrapper.dataset.schema = schema;
 
     const item = document.createElement('div');
     item.className = 'tree-item';
@@ -179,13 +206,49 @@ function _buildSchemaNode(schema) {
 
     const children = document.createElement('div');
     children.className = 'tree-children';
-    children.id = `schema-${CSS.escape(schema)}-tables`;
 
     item.addEventListener('click', () => _toggleSchema(schema, arrow, children));
 
     wrapper.appendChild(item);
     wrapper.appendChild(children);
     return wrapper;
+}
+
+async function applyBrowserFilter() {
+    const container = document.getElementById('db-browser-container');
+    const term = document.getElementById('browser-search').value.trim().toLocaleLowerCase();
+    const requestId = ++browserFilterRequestId;
+    const schemas = [...container.children].filter(node => node.dataset.schema);
+    for (const wrapper of schemas) {
+        const schema = wrapper.dataset.schema;
+        const arrow = wrapper.querySelector('.tree-arrow');
+        const children = wrapper.querySelector('.tree-children');
+        if (term && children.dataset.loaded !== '1') {
+            const res = await fetch(`/api/browser/schemas/${encodeURIComponent(schema)}/tables`);
+            if (requestId !== browserFilterRequestId) return;
+            if (!res.ok) throw new Error('Could not load tables for search');
+            const data = await res.json();
+            children.replaceChildren(...data.tables.map(table => _buildTableNode(schema, table)));
+            children.dataset.loaded = '1';
+        }
+        const schemaMatches = !term || schema.toLocaleLowerCase().includes(term);
+        const tables = [...children.querySelectorAll('.tree-table-item')];
+        let matchingTables = 0;
+        tables.forEach(row => {
+            const match = schemaMatches || row.dataset.table.toLocaleLowerCase().includes(term);
+            row.hidden = !match;
+            if (match) matchingTables++;
+        });
+        wrapper.hidden = !schemaMatches && matchingTables === 0;
+        const expanded = Boolean(term) && !schemaMatches && matchingTables > 0;
+        if (expanded) {
+            children.classList.add('active');
+            arrow.classList.add('open');
+        } else if (!term) {
+            children.classList.remove('active');
+            arrow.classList.remove('open');
+        }
+    }
 }
 
 async function _toggleSchema(schema, arrowEl, childrenEl) {
@@ -212,8 +275,9 @@ async function _toggleSchema(schema, arrowEl, childrenEl) {
                 } else {
                     data.tables.forEach(table => childrenEl.appendChild(_buildTableNode(schema, table)));
                 }
-            } catch {
-                childrenEl.innerHTML = '<div style="color:var(--danger-color);font-size:0.75rem;padding:0.25rem 0.5rem;">Error loading tables</div>';
+            } catch (err) {
+                childrenEl.textContent = err.message || 'Error loading tables';
+                childrenEl.classList.add('error-state');
             }
         }
     }
@@ -307,6 +371,13 @@ async function dropTable(schema, table, rowEl) {
 
 // ─── Table View ───────────────────────────────────────────────────────────────
 window.loadTable = async function(schema, table, page = 1) {
+    const requestId = ++tableRequestId;
+    if (schema !== currentSchema || table !== currentTable) {
+        currentSearch = '';
+        currentSortColumn = '';
+        currentSortDescending = false;
+        document.getElementById('table-search').value = '';
+    }
     currentSchema = schema;
     currentTable  = table;
     currentPage   = page;
@@ -338,21 +409,25 @@ window.loadTable = async function(schema, table, page = 1) {
             fetch(`/api/browser/schemas/${encodeURIComponent(schema)}/tables/${encodeURIComponent(table)}/columns`),
             fetch(`/api/crud/schemas/${encodeURIComponent(schema)}/tables/${encodeURIComponent(table)}/primary-key`)
         ]);
+        if (requestId !== tableRequestId) return;
         if (!structRes.ok) throw new Error('Failed to load table structure');
         const structData = await structRes.json();
         currentColumns = structData.columns;
 
         if (pkRes.ok) {
             const pkData = await pkRes.json();
-            if (pkData.primary_key_columns?.length) currentPrimaryKey = pkData.primary_key_columns[0];
+            if (pkData.primary_key_columns?.length === 1) currentPrimaryKey = pkData.primary_key_columns[0];
         }
-        if (!currentPrimaryKey && structData.columns.length) currentPrimaryKey = structData.columns[0].column_name;
 
         // Render header
         thead.innerHTML = '';
         const htr = document.createElement('tr');
         structData.columns.forEach(col => {
             const th = document.createElement('th');
+            if (!col.is_geometry) {
+                th.classList.add('sortable');
+                th.tabIndex = 0;
+            }
             if (col.is_geometry) {
                 th.title = `Geometry (${col.geom_type}, SRID: ${col.srid})`;
                 hasGeometry = true;
@@ -364,15 +439,39 @@ window.loadTable = async function(schema, table, page = 1) {
                 th.title += ' [PK]';
             }
             th.textContent = col.column_name;
+            if (!col.is_geometry && currentSortColumn === col.column_name) {
+                th.setAttribute('aria-sort', currentSortDescending ? 'descending' : 'ascending');
+                th.textContent += currentSortDescending ? ' ↓' : ' ↑';
+            } else if (!col.is_geometry) {
+                th.setAttribute('aria-sort', 'none');
+            }
+            const toggleSort = () => {
+                if (currentSortColumn === col.column_name) currentSortDescending = !currentSortDescending;
+                else {
+                    currentSortColumn = col.column_name;
+                    currentSortDescending = false;
+                }
+                loadTable(currentSchema, currentTable, 1);
+            };
+            if (!col.is_geometry) {
+                th.addEventListener('click', toggleSort);
+                th.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        toggleSort();
+                    }
+                });
+            }
             htr.appendChild(th);
         });
         thead.appendChild(htr);
 
         if (hasGeometry) mapBtn.style.display = 'inline-flex';
 
-        await _fetchAndRenderRows(schema, table, page, structData.columns);
+        await _fetchAndRenderRows(schema, table, page, structData.columns, requestId);
 
     } catch (err) {
+        if (requestId !== tableRequestId) return;
         tbody.innerHTML = `<tr><td style="color:var(--danger-color);padding:1rem;" colspan="100%">Error: ${escapeHtml(err.message)}</td></tr>`;
     }
 }
@@ -386,15 +485,22 @@ function _renderSkeleton(thead, tbody) {
     ).join('');
 }
 
-async function _fetchAndRenderRows(schema, table, page, columns) {
+async function _fetchAndRenderRows(schema, table, page, columns, requestId) {
     const tbody  = document.getElementById('data-table-body');
-    const offset = (page - 1) * PAGE_SIZE;
-
-    const dataRes = await fetch(
-        `/api/crud/schemas/${encodeURIComponent(schema)}/tables/${encodeURIComponent(table)}/rows?limit=${PAGE_SIZE}&offset=${offset}`
-    );
-    if (!dataRes.ok) throw new Error('Failed to load rows');
+    const offset = (page - 1) * pageSize;
+    const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
+    if (currentSearch) params.set('search', currentSearch);
+    if (currentSortColumn) {
+        params.set('sort_by', currentSortColumn);
+        params.set('sort_desc', String(currentSortDescending));
+    }
+    const dataRes = await fetch(`/api/crud/schemas/${encodeURIComponent(schema)}/tables/${encodeURIComponent(table)}/rows?${params}`);
+    if (!dataRes.ok) {
+        const error = await dataRes.json().catch(() => ({}));
+        throw new Error(error.detail || 'Failed to load rows');
+    }
     const data = await dataRes.json();
+    if (requestId !== tableRequestId) return;
     currentTotalRows = data.total ?? 0;
 
     tbody.innerHTML = '';
@@ -418,15 +524,19 @@ async function _fetchAndRenderRows(schema, table, page, columns) {
                     span.textContent = '[geometry]';
                     td.appendChild(span);
                 } else {
-                    td.className = 'editable';
+                    if (currentPrimaryKey) td.className = 'editable';
                     const displayVal = raw === null ? '' : (typeof raw === 'object' ? JSON.stringify(raw) : String(raw));
                     const span = document.createElement('span');
                     span.className = 'cell-value' + (raw === null ? ' null-val' : '');
                     span.textContent = raw === null ? 'NULL' : displayVal;
                     span.title = raw === null ? 'NULL' : displayVal;
                     td.appendChild(span);
-                    const pkVal = currentPrimaryKey ? row[currentPrimaryKey] : null;
-                    td.addEventListener('click', () => editCell(td, col.column_name, currentPrimaryKey, pkVal, displayVal));
+                    if (currentPrimaryKey) {
+                        const pkVal = row[currentPrimaryKey];
+                        td.addEventListener('click', () => editCell(td, col.column_name, currentPrimaryKey, pkVal, displayVal));
+                    } else {
+                        td.title = 'Read only: this table needs a single-column primary key for safe cell editing.';
+                    }
                 }
                 tr.appendChild(td);
             });
@@ -434,16 +544,19 @@ async function _fetchAndRenderRows(schema, table, page, columns) {
         });
     }
 
-    const totalPages = currentTotalRows > 0 ? Math.ceil(currentTotalRows / PAGE_SIZE) : 1;
+    const totalPages = currentTotalRows > 0 ? Math.ceil(currentTotalRows / pageSize) : 1;
     document.getElementById('page-info').textContent = `Page ${page} of ${totalPages} · ${currentTotalRows.toLocaleString()} rows`;
     document.getElementById('prev-page-btn').disabled = page <= 1;
     document.getElementById('next-page-btn').disabled = page >= totalPages;
 
     const pkBadge = currentPrimaryKey
         ? `<span style="background:rgba(245,158,11,0.15);color:var(--warning-color);border-radius:4px;padding:0.1rem 0.45rem;font-size:0.75rem;">PK: ${escapeHtml(currentPrimaryKey)}</span>`
-        : '';
+        : '<span class="read-only-note">Read-only: no single-column primary key</span>';
     document.getElementById('table-metadata').innerHTML =
-        `${pkBadge} <span>${columns.length} columns</span> <span>·</span> <span>${currentTotalRows.toLocaleString()} rows</span>`;
+        `${pkBadge} <span>${columns.length} columns</span> <span>·</span> <span>${currentTotalRows.toLocaleString()} ${currentSearch ? 'matching ' : ''}rows</span>`;
+    document.querySelector('.grid-hint').textContent = currentPrimaryKey
+        ? 'Click a cell to edit · Click a column to sort'
+        : 'Read-only without a single-column primary key · Click a column to sort';
 }
 
 // ─── Cell Editing ─────────────────────────────────────────────────────────────
@@ -632,11 +745,40 @@ window.dropColumn = async function(colName) {
 
 // ─── DOMContentLoaded wiring ──────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+    const browserSearch = document.getElementById('browser-search');
+    browserSearch.addEventListener('input', () => {
+        clearTimeout(browserSearchTimeout);
+        browserSearchTimeout = setTimeout(() => {
+            applyBrowserFilter().catch(err => showNotification(err.message, 'error'));
+        }, 150);
+    });
+
+    const tableSearch = document.getElementById('table-search');
+    tableSearch.addEventListener('input', () => {
+        clearTimeout(tableSearchTimeout);
+        tableSearchTimeout = setTimeout(() => {
+            currentSearch = tableSearch.value.trim();
+            if (currentSchema && currentTable) loadTable(currentSchema, currentTable, 1);
+        }, 300);
+    });
+    tableSearch.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+            clearTimeout(tableSearchTimeout);
+            currentSearch = tableSearch.value.trim();
+            if (currentSchema && currentTable) loadTable(currentSchema, currentTable, 1);
+        }
+    });
+
+    document.getElementById('page-size').addEventListener('change', event => {
+        pageSize = Number(event.target.value);
+        if (currentSchema && currentTable) loadTable(currentSchema, currentTable, 1);
+    });
+
     document.getElementById('prev-page-btn').addEventListener('click', () => {
         if (currentPage > 1) loadTable(currentSchema, currentTable, currentPage - 1);
     });
     document.getElementById('next-page-btn').addEventListener('click', () => {
-        const totalPages = currentTotalRows > 0 ? Math.ceil(currentTotalRows / PAGE_SIZE) : 1;
+        const totalPages = currentTotalRows > 0 ? Math.ceil(currentTotalRows / pageSize) : 1;
         if (currentPage < totalPages) loadTable(currentSchema, currentTable, currentPage + 1);
     });
     document.getElementById('refresh-table-btn').addEventListener('click', () => {

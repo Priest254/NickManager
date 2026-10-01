@@ -12,42 +12,50 @@
 <body>
 <div class="app-container">
 
-    <!-- Floating open button (shown when sidebar is collapsed) -->
-    <button class="sidebar-open-btn" id="sidebar-open-btn" title="Open sidebar">☰</button>
+    <button class="sidebar-open-btn" id="sidebar-open-btn" title="Open sidebar" aria-label="Open sidebar">☰</button>
 
     <!-- ── Sidebar ── -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <h2>PostGIS Manager</h2>
-            <button class="sidebar-toggle-btn" id="sidebar-collapse-btn" title="Collapse sidebar">◀</button>
+            <a class="brand" href="/" aria-label="PostGIS Manager home">
+                <span class="brand-mark" aria-hidden="true">P</span>
+                <span><strong>PostGIS Manager</strong><small>DATABASE WORKSPACE</small></span>
+            </a>
+            <button class="sidebar-toggle-btn" id="sidebar-collapse-btn" title="Collapse sidebar" aria-label="Collapse sidebar">◀</button>
         </div>
 
         <div class="sidebar-body">
 
             <!-- Connections -->
             <div>
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+                <div class="sidebar-section-heading">
                     <span class="sidebar-section-title">Connections</span>
-                    <button class="btn btn-sm btn-primary" id="add-conn-btn">+ Add</button>
+                    <button class="btn btn-sm btn-primary" id="add-conn-btn"><span aria-hidden="true">+</span> Add</button>
                 </div>
                 <div id="connection-list" class="connection-list"></div>
             </div>
 
-            <!-- Tools -->
             <div>
                 <span class="sidebar-section-title">Tools</span>
                 <div class="sidebar-actions">
-                    <button class="btn" id="import-shp-btn">&#128229; Import Shapefile</button>
-                    <button class="btn btn-success" id="backup-db-btn">&#128190; Backup DB</button>
-                    <button class="btn btn-danger" id="restore-db-btn">&#9851; Restore DB</button>
+                    <button class="btn" id="import-shp-btn"><span aria-hidden="true">⇧</span> Import shapefile</button>
+                    <button class="btn" id="backup-db-btn"><span aria-hidden="true">↓</span> Back up database</button>
+                    <button class="btn" id="restore-db-btn"><span aria-hidden="true">↻</span> Restore database</button>
                 </div>
             </div>
 
-            <!-- Browser tree -->
-            <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
-                <span class="sidebar-section-title">Browser</span>
-                <div id="db-browser-container" style="flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--panel-border) transparent;">
-                    <div style="color:var(--text-secondary);font-size:0.8rem;">Select a connection to browse schemas.</div>
+            <div class="browser-section">
+                <div class="sidebar-section-heading">
+                    <span class="sidebar-section-title">Database explorer</span>
+                    <button class="icon-btn" id="refresh-browser-btn" title="Refresh database explorer" aria-label="Refresh database explorer">↻</button>
+                </div>
+                <label class="search-field sidebar-search">
+                    <span aria-hidden="true">⌕</span>
+                    <input type="search" id="browser-search" placeholder="Filter schemas and tables" autocomplete="off" aria-label="Filter schemas and tables">
+                    <kbd>/</kbd>
+                </label>
+                <div id="db-browser-container" class="db-browser-container">
+                    <div class="empty-tree">Select a connection to browse schemas.</div>
                 </div>
             </div>
 
@@ -56,29 +64,67 @@
 
     <!-- ── Main Content ── -->
     <main class="main-content" id="main-content">
+        <header class="topbar">
+            <div class="topbar-context">
+                <span class="eyebrow">WORKSPACE</span>
+                <span id="active-connection-label">No active connection</span>
+            </div>
+            <div class="topbar-actions">
+                <span class="connection-status" id="connection-status" aria-live="polite"><i></i> No connection</span>
+                <button class="btn btn-primary" id="topbar-add-connection">Connect database</button>
+            </div>
+        </header>
 
-        <!-- Welcome -->
         <div class="glass-panel welcome-panel" id="welcome-panel">
-            <h1 style="font-size:2rem;">Welcome to PostGIS Manager</h1>
-            <p>Connect to your PostgreSQL/PostGIS database to browse tables, edit data, run SQL queries, import shapefiles, and visualise spatial data.</p>
-            <button class="btn btn-primary" style="font-size:1rem;padding:0.65rem 1.75rem;" onclick="document.getElementById('add-conn-btn').click()">Get Started</button>
+            <div class="welcome-content">
+                <div class="welcome-kicker"><span class="welcome-orb"></span> YOUR SPATIAL DATA, IN ONE PLACE</div>
+                <h1>Good data deserves<br><span>a better workspace.</span></h1>
+                <p>Connect to PostgreSQL and explore your tables, edit records, visualize spatial data, and manage imports and backups.</p>
+                <div class="welcome-actions">
+                    <button class="btn btn-primary btn-large" id="welcome-connect-btn">Connect a database <span aria-hidden="true">→</span></button>
+                    <button class="btn btn-quiet" id="welcome-query-btn">Open SQL workspace</button>
+                </div>
+                <div class="welcome-divider"></div>
+                <div class="feature-grid">
+                    <article class="feature-card"><span class="feature-icon">▦</span><div><strong>Browse with context</strong><small>Find tables and inspect schemas</small></div></article>
+                    <article class="feature-card"><span class="feature-icon">⌖</span><div><strong>See your geography</strong><small>Preview PostGIS layers on a map</small></div></article>
+                    <article class="feature-card"><span class="feature-icon">↗</span><div><strong>Work with confidence</strong><small>Import, edit, and back up data</small></div></article>
+                </div>
+            </div>
+            <div class="welcome-art" aria-hidden="true">
+                <div class="art-ring ring-one"></div><div class="art-ring ring-two"></div>
+                <div class="art-core"><span>⌖</span></div>
+                <div class="art-chip chip-top">POSTGRESQL <b>●</b></div>
+                <div class="art-chip chip-bottom">SPATIAL DATA <span>↗</span></div>
+                <div class="art-dot dot-one"></div><div class="art-dot dot-two"></div><div class="art-dot dot-three"></div>
+            </div>
         </div>
 
-        <!-- Table panel (hidden until a table is selected) -->
-        <div class="glass-panel" id="table-panel" style="display:none;flex-direction:column;flex:1;padding:1.25rem;min-height:0;overflow:hidden;">
+        <div class="glass-panel table-panel" id="table-panel" style="display:none;">
             <div class="table-toolbar">
-                <span class="table-toolbar-title" id="table-title">schema.table</span>
+                <div class="table-heading">
+                    <span class="eyebrow">TABLE DATA</span>
+                    <h1 class="table-toolbar-title" id="table-title">schema.table</h1>
+                </div>
                 <div class="table-toolbar-actions">
-                    <button class="btn btn-success" id="map-view-btn" style="display:none;">🗺 Map View</button>
-                    <button class="btn btn-warning" id="manage-cols-btn">⚙ Columns</button>
-                    <button class="btn" id="query-btn">⌨ SQL Query</button>
-                    <button class="btn btn-primary" id="refresh-table-btn">↻ Refresh</button>
+                    <button class="btn" id="query-btn"><span aria-hidden="true">⌘</span> SQL query</button>
+                    <button class="btn" id="manage-cols-btn"><span aria-hidden="true">☷</span> Columns</button>
+                    <button class="btn" id="map-view-btn" style="display:none;"><span aria-hidden="true">⌖</span> Map view</button>
+                    <button class="btn btn-primary" id="refresh-table-btn"><span aria-hidden="true">↻</span> Refresh</button>
                 </div>
             </div>
 
             <div class="table-meta" id="table-metadata"></div>
 
-            <!-- Grid -->
+            <div class="grid-toolbar">
+                <label class="search-field table-search">
+                    <span aria-hidden="true">⌕</span>
+                    <input type="search" id="table-search" placeholder="Search all rows in this table" maxlength="200" autocomplete="off" aria-label="Search all rows in this table">
+                    <kbd>↵</kbd>
+                </label>
+                <span class="grid-hint">Click a cell to edit · Click a column to sort</span>
+            </div>
+
             <div class="data-grid-container" id="grid-view-container">
                 <table class="data-table" id="data-table">
                     <thead><tr id="data-table-head"></tr></thead>
@@ -86,16 +132,20 @@
                 </table>
             </div>
 
-            <!-- Map -->
             <div id="map-view-container" style="flex:1;display:none;border-radius:9px;overflow:hidden;border:1px solid var(--panel-border);min-height:0;">
                 <div id="map" style="width:100%;height:100%;"></div>
             </div>
 
-            <!-- Pagination -->
             <div class="pagination" id="pagination-controls">
                 <button class="btn btn-sm" id="prev-page-btn">← Previous</button>
                 <span class="page-info" id="page-info">Page 1</span>
                 <button class="btn btn-sm" id="next-page-btn">Next →</button>
+                <label class="page-size-control">Rows
+                    <select id="page-size" class="form-control" aria-label="Rows per page">
+                        <option value="25">25</option><option value="50" selected>50</option><option value="100">100</option>
+                    </select>
+                    per page
+                </label>
             </div>
         </div>
 
@@ -104,71 +154,71 @@
 
 <!-- ── Connection Modal ── -->
 <div class="modal-overlay" id="conn-modal">
-    <div class="glass-panel modal">
+    <div class="glass-panel modal" role="dialog" aria-modal="true" aria-labelledby="conn-modal-title">
         <div class="modal-header">
-            <h2>Add Connection</h2>
-            <button class="close-btn" id="conn-close-btn">&times;</button>
+            <div><span class="eyebrow">DATABASE PROFILE</span><h2 id="conn-modal-title">Add a connection</h2></div>
+            <button class="close-btn" id="conn-close-btn" aria-label="Close dialog">&times;</button>
         </div>
         <div class="modal-body">
             <form id="conn-form" autocomplete="off">
                 <div class="form-group">
-                    <label>Connection Name</label>
-                    <input type="text" name="name" class="form-control" required placeholder="e.g. Local Dev">
+                    <label for="connection-name">Connection name</label>
+                    <input id="connection-name" type="text" name="name" class="form-control" required placeholder="e.g. Local development" autocomplete="off">
                 </div>
                 <div class="form-row">
                     <div class="form-group" style="flex:2;">
-                        <label>Host</label>
-                        <input type="text" name="host" class="form-control" required value="localhost">
+                        <label for="connection-host">Host</label>
+                        <input id="connection-host" type="text" name="host" class="form-control" required value="localhost" autocomplete="off">
                     </div>
                     <div class="form-group" style="flex:1;">
-                        <label>Port</label>
-                        <input type="number" name="port" class="form-control" required value="5432">
+                        <label for="connection-port">Port</label>
+                        <input id="connection-port" type="number" name="port" class="form-control" required value="5432" min="1" max="65535">
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Database Name</label>
-                    <input type="text" name="db_name" class="form-control" required>
+                    <label for="connection-database">Database name</label>
+                    <input id="connection-database" type="text" name="db_name" class="form-control" required autocomplete="off">
                 </div>
                 <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" name="user" class="form-control" required>
+                    <label for="connection-user">Username</label>
+                    <input id="connection-user" type="text" name="user" class="form-control" required autocomplete="username">
                 </div>
                 <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" name="password" class="form-control" required>
+                    <label for="connection-password">Password</label>
+                    <input id="connection-password" type="password" name="password" class="form-control" required autocomplete="current-password">
                 </div>
             </form>
         </div>
         <div class="modal-footer">
-            <button type="button" class="btn" id="test-conn-btn">Test Connection</button>
+            <button type="button" class="btn" id="test-conn-btn">Test connection</button>
             <div style="flex:1;"></div>
             <button type="button" class="btn" id="cancel-btn">Cancel</button>
-            <button type="submit" form="conn-form" class="btn btn-primary">Save Profile</button>
+            <button type="submit" form="conn-form" class="btn btn-primary">Save and connect</button>
         </div>
     </div>
 </div>
 
 <!-- ── Import Shapefile Modal ── -->
 <div class="modal-overlay" id="import-modal">
-    <div class="glass-panel modal">
+    <div class="glass-panel modal" role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
         <div class="modal-header">
-            <h2>Import Shapefile</h2>
-            <button class="close-btn" id="import-close-btn">&times;</button>
+            <h2 id="import-modal-title">Import shapefile</h2>
+            <button class="close-btn" id="import-close-btn" aria-label="Close dialog">&times;</button>
         </div>
         <div class="modal-body">
             <form id="import-form">
                 <div class="form-group">
-                    <label>Zip File (.zip containing .shp)</label>
-                    <input type="file" name="file" accept=".zip" class="form-control" required>
+                    <label for="shapefile-input">Zip file (.zip containing .shp)</label>
+                    <input id="shapefile-input" type="file" name="file" accept=".zip" class="form-control" required>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Target Schema</label>
-                        <input type="text" name="schema" class="form-control" required value="public">
+                        <label for="import-schema">Target schema</label>
+                        <input id="import-schema" type="text" name="schema" class="form-control" required value="public">
                     </div>
                     <div class="form-group">
-                        <label>Target Table</label>
-                        <input type="text" name="table" class="form-control" required placeholder="e.g. parcels">
+                        <label for="import-table">Target table</label>
+                        <input id="import-table" type="text" name="table" class="form-control" required placeholder="e.g. parcels">
                     </div>
                 </div>
                 <div class="form-group">
@@ -191,15 +241,15 @@
 
 <!-- ── Restore DB Modal ── -->
 <div class="modal-overlay" id="restore-db-modal">
-    <div class="glass-panel modal">
+    <div class="glass-panel modal" role="dialog" aria-modal="true" aria-labelledby="restore-modal-title">
         <div class="modal-header">
-            <h2>Restore Database</h2>
-            <button class="close-btn" id="restore-db-close-btn">&times;</button>
+            <h2 id="restore-modal-title">Restore database</h2>
+            <button class="close-btn" id="restore-db-close-btn" aria-label="Close dialog">&times;</button>
         </div>
         <div class="modal-body">
             <form id="restore-db-form">
                 <div class="form-group">
-                    <label>Backup File (.dump or .sql)</label>
+                    <label for="restore-file">Backup file (.dump or .sql)</label>
                     <input type="file" name="file" id="restore-file" accept=".dump,.sql" class="form-control" required>
                 </div>
                 <div class="form-group">
@@ -220,10 +270,10 @@
 
 <!-- ── Manage Columns Modal ── -->
 <div class="modal-overlay" id="cols-modal">
-    <div class="glass-panel modal">
+    <div class="glass-panel modal" role="dialog" aria-modal="true" aria-labelledby="cols-modal-title">
         <div class="modal-header">
-            <h2>Manage Columns</h2>
-            <button class="close-btn" id="cols-close-btn">&times;</button>
+            <h2 id="cols-modal-title">Manage columns</h2>
+            <button class="close-btn" id="cols-close-btn" aria-label="Close dialog">&times;</button>
         </div>
         <div class="modal-body" style="max-height:400px;overflow-y:auto;">
             <div id="cols-list" class="connection-list"></div>
@@ -236,14 +286,14 @@
 
 <!-- ── SQL Query Modal ── -->
 <div class="modal-overlay" id="query-modal">
-    <div class="glass-panel modal" style="max-width:720px;">
+    <div class="glass-panel modal query-modal" role="dialog" aria-modal="true" aria-labelledby="query-modal-title">
         <div class="modal-header">
-            <h2>SQL Query</h2>
-            <button class="close-btn" id="query-close-btn">&times;</button>
+            <div><span class="eyebrow">ACTIVE DATABASE</span><h2 id="query-modal-title">SQL workspace</h2></div>
+            <button class="close-btn" id="query-close-btn" aria-label="Close dialog">&times;</button>
         </div>
         <div class="modal-body" style="display:flex;flex-direction:column;gap:0.75rem;">
             <div class="form-group" style="margin:0;">
-                <label>Query <span style="color:var(--text-secondary);font-weight:400;">&nbsp;Ctrl+Enter to run</span></label>
+                <label for="query-input">Query <span class="shortcut-hint">Ctrl + Enter to run</span></label>
                 <textarea id="query-input" class="form-control" rows="5" spellcheck="false"
                     style="font-family:monospace;font-size:0.85rem;"
                     placeholder="SELECT * FROM public.my_table LIMIT 10;"></textarea>
@@ -258,7 +308,7 @@
 </div>
 
 <!-- ── Notifications ── -->
-<div id="notification-container" class="notification-container"></div>
+<div id="notification-container" class="notification-container" aria-live="polite" aria-atomic="false"></div>
 
 <script src="/static/js/app.js"></script>
 <script src="/static/js/browser.js"></script>

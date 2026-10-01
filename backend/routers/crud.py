@@ -57,22 +57,30 @@ def get_table_rows(
     offset: int = Query(0, ge=0),
     sort_by: Optional[str] = None,
     sort_desc: bool = False,
+    search: Optional[str] = Query(None, max_length=200),
     db: Session = Depends(get_db)
 ):
     profile = get_active_connection(db)
     with get_pg_connection(profile) as conn:
         with conn.cursor() as cur:
             # Safely format table name
-            query = sql.SQL("SELECT * FROM {}.{}").format(sql.Identifier(schema), sql.Identifier(table))
+            query = sql.SQL("SELECT * FROM {}.{} AS t").format(sql.Identifier(schema), sql.Identifier(table))
+            where = sql.SQL("")
+            params = []
+            if search:
+                where = sql.SQL(" WHERE to_jsonb(t)::text ILIKE %s")
+                params.append(f"%{search}%")
+            query += where
             
             if sort_by:
                 order = sql.SQL("DESC") if sort_desc else sql.SQL("ASC")
-                query += sql.SQL(" ORDER BY {} {}").format(sql.Identifier(sort_by), order)
+                query += sql.SQL(" ORDER BY t.{} {}").format(sql.Identifier(sort_by), order)
                 
             query += sql.SQL(" LIMIT %s OFFSET %s")
+            params.extend([limit, offset])
             
             try:
-                cur.execute(query, (limit, offset))
+                cur.execute(query, params)
                 rows = cur.fetchall()
                 rows = [_serialize_row(row) for row in rows]
                 
@@ -80,7 +88,11 @@ def get_table_rows(
                 count_query = sql.SQL("SELECT COUNT(*) AS total FROM {}.{}").format(
                     sql.Identifier(schema), sql.Identifier(table)
                 )
-                cur.execute(count_query)
+                if search:
+                    count_query += sql.SQL(" AS t") + where
+                    cur.execute(count_query, (f"%{search}%",))
+                else:
+                    cur.execute(count_query)
                 total = cur.fetchone()['total']
 
                 return {"rows": rows, "total": total}
