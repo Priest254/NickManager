@@ -77,25 +77,16 @@
 
         <div class="glass-panel welcome-panel" id="welcome-panel">
             <div class="welcome-content">
-                <div class="welcome-kicker"><span class="welcome-orb"></span> YOUR SPATIAL DATA, IN ONE PLACE</div>
-                <h1>Good data deserves<br><span>a better workspace.</span></h1>
-                <p>Connect to PostgreSQL and explore your tables, edit records, visualize spatial data, and manage imports and backups.</p>
+                <div class="welcome-kicker"><span class="welcome-orb"></span> POSTGIS WORKSPACE</div>
+                <h1>Your data,<br><span>in focus.</span></h1>
+                <p>Browse, edit, map, and back up PostgreSQL data.</p>
                 <div class="welcome-actions">
-                    <button class="btn btn-primary btn-large" id="welcome-connect-btn">Connect a database <span aria-hidden="true">→</span></button>
-                    <button class="btn btn-quiet" id="welcome-query-btn">Open SQL workspace</button>
-                </div>
-                <div class="welcome-divider"></div>
-                <div class="feature-grid">
-                    <article class="feature-card"><span class="feature-icon">▦</span><div><strong>Browse with context</strong><small>Find tables and inspect schemas</small></div></article>
-                    <article class="feature-card"><span class="feature-icon">⌖</span><div><strong>See your geography</strong><small>Preview PostGIS layers on a map</small></div></article>
-                    <article class="feature-card"><span class="feature-icon">↗</span><div><strong>Work with confidence</strong><small>Import, edit, and back up data</small></div></article>
+                    <button class="btn btn-primary btn-large" id="welcome-connect-btn">Connect database <span aria-hidden="true">→</span></button>
                 </div>
             </div>
             <div class="welcome-art" aria-hidden="true">
                 <div class="art-ring ring-one"></div><div class="art-ring ring-two"></div>
                 <div class="art-core"><span>⌖</span></div>
-                <div class="art-chip chip-top">POSTGRESQL <b>●</b></div>
-                <div class="art-chip chip-bottom">SPATIAL DATA <span>↗</span></div>
                 <div class="art-dot dot-one"></div><div class="art-dot dot-two"></div><div class="art-dot dot-three"></div>
             </div>
         </div>
@@ -154,7 +145,7 @@
 
 <!-- ── Connection Modal ── -->
 <div class="modal-overlay" id="conn-modal">
-    <div class="glass-panel modal" role="dialog" aria-modal="true" aria-labelledby="conn-modal-title">
+    <div class="glass-panel modal connection-modal" role="dialog" aria-modal="true" aria-labelledby="conn-modal-title">
         <div class="modal-header">
             <div><span class="eyebrow">DATABASE PROFILE</span><h2 id="conn-modal-title">Add a connection</h2></div>
             <button class="close-btn" id="conn-close-btn" aria-label="Close dialog">&times;</button>
@@ -188,12 +179,12 @@
                     <input id="connection-password" type="password" name="password" class="form-control" required autocomplete="current-password">
                 </div>
             </form>
+            <div id="connection-feedback" class="form-feedback" role="status" aria-live="polite" aria-atomic="true"></div>
         </div>
         <div class="modal-footer">
-            <button type="button" class="btn" id="test-conn-btn">Test connection</button>
-            <div style="flex:1;"></div>
+            <button type="button" class="btn" id="test-conn-btn">Test</button>
             <button type="button" class="btn" id="cancel-btn">Cancel</button>
-            <button type="submit" form="conn-form" class="btn btn-primary">Save and connect</button>
+            <button type="submit" form="conn-form" id="save-conn-btn" class="btn btn-primary">Save &amp; connect</button>
         </div>
     </div>
 </div>

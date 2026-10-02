@@ -20,7 +20,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('topbar-add-connection').addEventListener('click', () => document.getElementById('add-conn-btn').click());
     document.getElementById('welcome-connect-btn').addEventListener('click', () => document.getElementById('add-conn-btn').click());
-    document.getElementById('welcome-query-btn').addEventListener('click', () => document.getElementById('query-btn').click());
     document.getElementById('refresh-browser-btn').addEventListener('click', () => window.loadBrowser?.());
 
     document.addEventListener('keydown', (event) => {
@@ -49,9 +48,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const modal       = document.getElementById('conn-modal');
     const connForm    = document.getElementById('conn-form');
     const testConnBtn = document.getElementById('test-conn-btn');
+    const saveConnBtn = document.getElementById('save-conn-btn');
+    const feedback    = document.getElementById('connection-feedback');
+    let saving = false;
 
     const openConnModal = () => {
         connForm.reset();
+        setConnectionFeedback('');
         modal.classList.add('active');
         connForm.querySelector('[name=name]').focus();
     };
@@ -64,29 +67,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // Close on backdrop click
     modal.addEventListener('click', (e) => { if (e.target === modal) closeConnModal(); });
 
+    connForm.addEventListener('input', () => setConnectionFeedback(''));
     connForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (saving || !connForm.reportValidity()) return;
+        saving = true;
         const data = Object.fromEntries(new FormData(connForm).entries());
         data.port = parseInt(data.port) || 5432;
-        const submitBtn = connForm.querySelector('[type=submit]');
-        submitBtn.disabled = true;
+        saveConnBtn.disabled = true;
+        saveConnBtn.textContent = 'Saving…';
+        setConnectionFeedback('Saving connection…', 'pending');
         try {
-            const res = await fetch('/api/connections/', {
+            const res = await fetch('/api/connections/save-and-connect', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
             if (!res.ok) throw new Error(await responseError(res, 'Could not save connection'));
-            const profile = await res.json();
-            const activateRes = await fetch(`/api/connections/${profile.id}/activate`, { method: 'POST' });
-            if (!activateRes.ok) throw new Error(await responseError(activateRes, 'Connection saved, but activation failed'));
+            await res.json();
             closeConnModal();
             await loadConnections();
-            showNotification('Connection saved and activated', 'success');
+            showNotification('Connected', 'success');
         } catch (err) {
-            showNotification(err.message, 'error');
+            setConnectionFeedback(err.message || 'Could not save connection.', 'error');
         } finally {
-            submitBtn.disabled = false;
+            saving = false;
+            saveConnBtn.disabled = false;
+            saveConnBtn.textContent = 'Save & connect';
         }
     });
 
@@ -97,22 +104,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const orig = testConnBtn.textContent;
         testConnBtn.textContent = 'Testing…';
         testConnBtn.disabled = true;
+        saveConnBtn.disabled = true;
+        setConnectionFeedback('Testing connection…', 'pending');
         try {
             const res = await fetch('/api/connections/test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-            const result = await res.json();
-            if (result.success) showNotification('Connection successful!', 'success');
-            else showNotification('Failed: ' + result.message, 'error');
-        } catch {
-            showNotification('Error testing connection', 'error');
+            const result = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(result.detail || 'Could not test connection.');
+            if (result.success) setConnectionFeedback('Connection works. Save to connect.', 'success');
+            else setConnectionFeedback(result.message || 'Connection failed.', 'error');
+        } catch (err) {
+            setConnectionFeedback(err.message || 'Could not test connection.', 'error');
         } finally {
             testConnBtn.textContent = orig;
             testConnBtn.disabled = false;
+            saveConnBtn.disabled = false;
         }
     });
+
+    function setConnectionFeedback(message, state = '') {
+        feedback.textContent = message;
+        feedback.className = `form-feedback${state ? ` ${state}` : ''}`;
+    }
 });
 
 // ─── Import Shapefile Modal ───────────────────────────────────────────────────

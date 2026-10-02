@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import List
 import psycopg
@@ -38,22 +39,45 @@ def get_connections(db: Session = Depends(get_db)):
 
 @router.post("/", response_model=ConnectionProfileResponse)
 def create_connection(profile: ConnectionProfileCreate, db: Session = Depends(get_db)):
-    db_profile = ConnectionProfile(**profile.model_dump(exclude={"password"}), password="")
+    return _save_profile(profile, db, activate=False)
+
+@router.post("/save-and-connect", response_model=ConnectionProfileResponse)
+def save_and_connect(profile: ConnectionProfileCreate, db: Session = Depends(get_db)):
+    return _save_profile(profile, db, activate=True)
+
+def _save_profile(profile: ConnectionProfileCreate, db: Session, activate: bool):
+    if activate:
+        db.query(ConnectionProfile).update({"is_active": False})
+    db_profile = ConnectionProfile(
+        **profile.model_dump(exclude={"password"}),
+        password="",
+        is_active=activate,
+    )
     db.add(db_profile)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=f"A connection named '{profile.name}' already exists.",
+        ) from exc
+
     try:
         store_profile_password(db_profile.id, profile.password)
-    except Exception:
+    except Exception as exc:
         db.rollback()
         logger.exception("Could not store a connection password")
         raise HTTPException(
             status_code=503,
             detail="Could not save the connection password in the operating-system credential store.",
-        )
+        ) from exc
+
     try:
         db.commit()
     except Exception:
         db.rollback()
+        logger.exception("Could not save a connection profile")
         try:
             delete_profile_password(db_profile.id)
         except Exception:

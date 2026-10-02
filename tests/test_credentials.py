@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session
 from backend.credentials import get_profile_password, migrate_legacy_passwords
 from backend.database import Base
 from backend.models import ConnectionProfile
-from backend.routers.connections import ConnectionProfileCreate, ConnectionProfileResponse, create_connection
+from backend.routers.connections import (
+    ConnectionProfileCreate,
+    ConnectionProfileResponse,
+    create_connection,
+    save_and_connect,
+)
 
 
 class CredentialTests(unittest.TestCase):
@@ -64,6 +69,62 @@ class CredentialTests(unittest.TestCase):
         self.assertEqual(profile.password, "")
         response = ConnectionProfileResponse.model_validate(profile).model_dump()
         self.assertNotIn("password", response)
+
+    def test_save_and_connect_atomically_activates_new_profile(self):
+        self.profile.is_active = True
+        self.session.commit()
+        payload = ConnectionProfileCreate(
+            name="Remote",
+            host="db.example.test",
+            port=5432,
+            db_name="gis",
+            user="gis",
+            password="another-secret",
+        )
+        with patch("backend.routers.connections.store_profile_password") as store:
+            profile = save_and_connect(payload, self.session)
+
+        store.assert_called_once_with(profile.id, "another-secret")
+        self.assertTrue(profile.is_active)
+        self.session.refresh(self.profile)
+        self.assertFalse(self.profile.is_active)
+
+    def test_save_and_connect_rolls_back_if_credential_store_fails(self):
+        self.profile.is_active = True
+        self.session.commit()
+        payload = ConnectionProfileCreate(
+            name="Remote",
+            host="db.example.test",
+            port=5432,
+            db_name="gis",
+            user="gis",
+            password="another-secret",
+        )
+        with patch(
+            "backend.routers.connections.store_profile_password",
+            side_effect=RuntimeError("credential store unavailable"),
+        ):
+            with self.assertRaises(HTTPException) as error:
+                save_and_connect(payload, self.session)
+
+        self.assertEqual(error.exception.status_code, 503)
+        self.session.refresh(self.profile)
+        self.assertTrue(self.profile.is_active)
+        self.assertEqual(self.session.query(ConnectionProfile).count(), 1)
+
+    def test_duplicate_connection_name_returns_conflict(self):
+        payload = ConnectionProfileCreate(
+            name="Local",
+            host="localhost",
+            port=5432,
+            db_name="gis",
+            user="gis",
+            password="another-secret",
+        )
+        with self.assertRaises(HTTPException) as error:
+            create_connection(payload, self.session)
+
+        self.assertEqual(error.exception.status_code, 409)
 
 
 if __name__ == "__main__":
