@@ -6,8 +6,8 @@ cd "$(dirname "$0")"
 echo "Starting PostGIS Manager..."
 echo "Please wait while the server initializes..."
 
-if [ -x "nm/bin/python" ]; then
-  PYTHON_BIN="nm/bin/python"
+if [ -x "man/bin/python" ]; then
+  PYTHON_BIN="man/bin/python"
 elif command -v python3 >/dev/null 2>&1; then
   PYTHON_BIN="python3"
 elif command -v python >/dev/null 2>&1; then

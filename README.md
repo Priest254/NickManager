@@ -7,7 +7,7 @@ A single-user desktop-launched workspace for managing PostgreSQL and PostGIS dat
 - Save connection profiles and connect to local or remote PostgreSQL databases.
 - Explore schemas, search and sort table rows, and edit rows with a single-column primary key.
 - Rename or delete columns, run SQL queries, and preview PostGIS geometries on a map.
-- Import zipped shapefiles and create or restore database backups.
+- Import shapefiles from ZIP archives or their individual component files, and create or restore database backups.
 
 ## Windows installer
 
